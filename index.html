@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Thiệp tri ân Thầy giáo Tin học</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0b0c10;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #touch-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            padding-bottom: 8%;
+        }
+        #instruction {
+            color: #00ff41;
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            background: rgba(11, 12, 16, 0.8);
+            padding: 12px 24px;
+            border-radius: 6px;
+            border: 1px solid #00ff41;
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.4);
+            animation: pulse 1.5s infinite alternate;
+            pointer-events: none; /* Xuyên click xuống layer dưới */
+        }
+        @keyframes pulse {
+            from { opacity: 0.6; box-shadow: 0 0 5px #00ff41; }
+            to { opacity: 1; box-shadow: 0 0 15px #00ff41; }
+        }
+    </style>
+    <!-- Thư viện Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+    
+    <!-- Lớp phủ bắt sự kiện click/chạm -->
+    <div id="touch-layer">
+        <div id="instruction">CHẠM ĐỂ MỞ MÁY TÍNH</div>
+    </div>
+
+    <script>
+        // --- 1. SETUP SCENE, CAMERA, RENDERER ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(0x0b0c10, 3, 12);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 50);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        // --- 2. ÁNH SÁNG ---
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 5);
+        scene.add(dirLight);
+
+        const screenLight = new THREE.PointLight(0x00ff41, 0, 4);
+        screenLight.position.set(0, 0.5, 0.5);
+        scene.add(screenLight);
+
+        // --- 3. DỰNG MÔ HÌNH LAPTOP 3D ---
+        const laptopGroup = new THREE.Group();
+        scene.add(laptopGroup);
+
+        const alloyMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x1f1f23, roughness: 0.6, metalness: 0.5 
+        });
+
+        // Thân máy (Base)
+        const baseGeom = new THREE.BoxGeometry(4.0, 0.15, 2.8);
+        const baseMesh = new THREE.Mesh(baseGeom, alloyMaterial);
+        laptopGroup.add(baseMesh);
+
+        // Bàn phím (Keyboard 3D)
+        const keyMaterial = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+        for (let row = 0; row < 5; row++) {
+            for (let col = 0; col < 13; col++) {
+                if (row === 4 && col >= 4 && col <= 8) continue; // Nhường chỗ cho Spacebar
+                const key = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.04, 0.2), keyMaterial);
+                key.position.set((col - 6) * 0.26, 0.08, (row - 2.5) * 0.26);
+                laptopGroup.add(key);
+            }
+        }
+        
+        const spacebar = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.04, 0.2), keyMaterial);
+        spacebar.position.set(0, 0.08, 1.5 * 0.26);
+        laptopGroup.add(spacebar);
+
+        const trackpad = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.2, 0.7), 
+            new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.5 })
+        );
+        trackpad.rotation.x = -Math.PI / 2;
+        trackpad.position.set(0, 0.076, 1.0);
+        laptopGroup.add(trackpad);
+
+        // --- 4. NẮP MÁY & MÀN HÌNH ---
+        const lidGroup = new THREE.Group();
+        // Tâm xoay (Bản lề) nằm ở gáy máy và nhô lên bằng mặt phím để không cấn
+        lidGroup.position.set(0, 0.10, -1.4); 
+        laptopGroup.add(lidGroup);
+
+        // Vỏ kim loại nắp máy
+        const lidMesh = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.1, 2.8), alloyMaterial);
+        // Tịnh tiến tâm nắp máy ra giữa
+        lidMesh.position.set(0, 0.05, 1.4); 
+        lidGroup.add(lidMesh);
+
+        // Màn Hình (Nằm bên trong úp xuống bàn phím)
+        const screenCanvas = document.createElement('canvas');
+        screenCanvas.width = 1200;
+        screenCanvas.height = 760;
+        const ctx = screenCanvas.getContext('2d');
+        const screenTexture = new THREE.CanvasTexture(screenCanvas);
+        screenTexture.minFilter = THREE.LinearFilter;
+        
+        const screenMaterial = new THREE.MeshBasicMaterial({ map: screenTexture });
+        const screenDisplay = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 2.4), screenMaterial);
+        screenDisplay.position.set(0, -0.001, 1.4); // Ở sát mặt dưới của vỏ nắp
+        screenDisplay.rotation.x = Math.PI / 2; // Xoay chuẩn chiều để hướng mặt xuống
+        screenDisplay.rotation.z = 0; // KHÔNG xoay Z nữa để chữ thuận 100%
+        lidGroup.add(screenDisplay);
+
+        // Logo Windows 11 (Nằm bên ngoài mặt lưng)
+        const logoCanvas = document.createElement('canvas');
+        logoCanvas.width = 256; logoCanvas.height = 256;
+        const lctx = logoCanvas.getContext('2d');
+        lctx.fillStyle = '#00aaff';
+        lctx.fillRect(16, 16, 104, 104);
+        lctx.fillRect(136, 16, 104, 104);
+        lctx.fillRect(16, 136, 104, 104);
+        lctx.fillRect(136, 136, 104, 104);
+        const logoTex = new THREE.CanvasTexture(logoCanvas);
+        const logoMaterial = new THREE.MeshStandardMaterial({ 
+            map: logoTex, transparent: true, emissive: 0x00aaff, emissiveIntensity: 0.7 
+        });
+        const logoDisplay = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), logoMaterial);
+        logoDisplay.position.set(0, 0.101, 1.4); // Ở sát mặt trên của vỏ nắp
+        logoDisplay.rotation.x = -Math.PI / 2; // Hướng lên trời
+        lidGroup.add(logoDisplay);
+
+        // --- 5. LOGIC CODE HIỂN THỊ (VS CODE MATRIX) ---
+        const snippets = [
+`// Gửi người đưa đò trên dòng sông nhị phân
+const teacher = new IT_Teacher("Thầy");
+teacher.passion = Infinity;
+
+console.log("Chúc mừng ngày 20/11!");
+console.log("Cảm ơn Thầy đã biên dịch những lỗi lầm");
+console.log("thành hành trang bước vào tương lai.");`,
+
+`// Khai báo vòng lặp sức khỏe và bình an
+let health = 100;
+let happiness = true;
+
+while (happiness === true) {
+    health += 10;
+    teacher.energyLevel = "Cực đại";
+    // Kính chúc Thầy luôn giữ mãi ngọn lửa nghề,
+    // dồi dào sức khỏe qua từng năm tháng.
+}`,
+
+`// Thuật toán vượt khó
+try {
+    compile(teacher.career);
+} catch (bugs) {
+    bugs.fixAll();
+    console.log("Mọi khó khăn đều được gỡ rối mượt mà.");
+    // Chúc sự nghiệp trồng người của Thầy
+    // luôn chạy thành công, không bao giờ bị Crash!
+}`,
+
+`// Hàm kiến tạo tương lai
+async function getFuture() {
+    return new Promise((resolve) => {
+        resolve("Thành công rực rỡ & Đong đầy hạnh phúc!");
+    });
+}
+
+await getFuture();
+// Mong từng dòng code Thầy truyền đạt
+// sẽ chắp cánh cho những ước mơ bay xa.`
+        ];
+
+        let matrixDrops = Array(Math.floor(1200 / 24)).fill(0);
+        let currentSnippet = 0;
+        let typedCode = "";
+        let codeProgress = 0;
+        let isTyping = false;
+
+        function drawCodeBlock(ctx, code, startX, startY) {
+            ctx.font = '24px "Consolas", monospace';
+            const lines = code.split('\n');
+            let currentY = startY;
+
+            for (let line of lines) {
+                let currentX = startX;
+                if (line.trim().startsWith('//')) {
+                    ctx.fillStyle = '#6A9955'; 
+                    ctx.fillText(line, currentX, currentY);
+                } else {
+                    const tokens = line.match(/(["'].*?["']|\w+|[^\w\s]|\s+)/g) || [];
+                    tokens.forEach(token => {
+                        if (/^(const|let|function|return|while|try|catch|async|await|new)$/.test(token)) {
+                            ctx.fillStyle = '#C586C0';
+                        } else if (/^(true|false|Infinity|[0-9]+)$/.test(token)) {
+                            ctx.fillStyle = '#B5CEA8';
+                        } else if (/^(Promise|console|IT_Teacher)$/.test(token)) {
+                            ctx.fillStyle = '#4EC9B0';
+                        } else if (token.startsWith('"') || token.startsWith("'")) {
+                            ctx.fillStyle = '#CE9178';
+                        } else if (/^[=+\-<>!{}()\[\]]+$/.test(token)) {
+                            ctx.fillStyle = '#D4D4D4';
+                        } else {
+                            ctx.fillStyle = '#9CDCFE';
+                        }
+                        ctx.fillText(token, currentX, currentY);
+                        currentX += ctx.measureText(token).width;
+                    });
+                }
+                currentY += 36;
+            }
+        }
+
+        function renderCanvas() {
+            // Xóa nền tạo bóng mờ Matrix
+            ctx.fillStyle = 'rgba(11, 12, 16, 0.15)';
+            ctx.fillRect(0, 0, screenCanvas.width, screenCanvas.height);
+            
+            // Vẽ Matrix Code Rain
+            ctx.fillStyle = '#00FF41';
+            ctx.font = '20px monospace';
+            for (let i = 0; i < matrixDrops.length; i++) {
+                const char = Math.random() > 0.5 ? '1' : '0';
+                ctx.fillText(char, i * 24, matrixDrops[i] * 24);
+                if (matrixDrops[i] * 24 > screenCanvas.height && Math.random() > 0.95) matrixDrops[i] = 0;
+                matrixDrops[i]++;
+            }
+
+            // Vẽ VS Code Editor
+            if (appState > 0 && appState < 5) {
+                ctx.fillStyle = 'rgba(30, 30, 30, 0.95)';
+                ctx.beginPath(); ctx.roundRect(60, 60, screenCanvas.width - 120, screenCanvas.height - 120, 10); ctx.fill();
+                
+                ctx.fillStyle = '#252526';
+                ctx.beginPath(); ctx.roundRect(60, 60, screenCanvas.width - 120, 40, [10, 10, 0, 0]); ctx.fill();
+                
+                ctx.fillStyle = '#FF5F56'; ctx.beginPath(); ctx.arc(90, 80, 7, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#FFBD2E'; ctx.beginPath(); ctx.arc(115, 80, 7, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#27C93F'; ctx.beginPath(); ctx.arc(140, 80, 7, 0, Math.PI*2); ctx.fill();
+
+                ctx.fillStyle = '#CCCCCC';
+                ctx.font = '18px sans-serif';
+                ctx.fillText('TriAnThay.js - VS Code', 170, 86);
+
+                // In code
+                drawCodeBlock(ctx, typedCode, 90, 150);
+
+                // Lời nhắc
+                if (!isTyping && appState > 0) {
+                    ctx.fillStyle = '#858585';
+                    ctx.font = 'italic 18px monospace';
+                    ctx.fillText('// (Chạm màn hình để tiếp tục...)', 90, screenCanvas.height - 90);
+                }
+            }
+            
+            screenTexture.needsUpdate = true; // Báo ThreeJS cập nhật lại texture
+        }
+
+        // --- 6. HỆ THỐNG ANIMATION & TƯƠNG TÁC ---
+        let appState = 0; // 0: Đóng, 1-4: Lời chúc, 5: Xong/Gập
+        let lastTouchTime = 0;
+        
+        let currentLidRot = 0;
+        let targetLidRot = 0;
+
+        // Trạng thái Camera
+        let currentCamPos = new THREE.Vector3(-4, 3.5, 4); // Góc nghiêng nhìn thấy nắp lưng
+        let targetCamPos = new THREE.Vector3(-4, 3.5, 4);
+        let currentLookAt = new THREE.Vector3(0, 0, 0);
+        let targetLookAt = new THREE.Vector3(0, 0, 0);
+
+        const touchLayer = document.getElementById('touch-layer');
+        const instrBox = document.getElementById('instruction');
+
+        // Bắt sự kiện bấm (chuột + cảm ứng)
+        touchLayer.addEventListener('pointerdown', () => {
+            const now = Date.now();
+            if (now - lastTouchTime < 350) return; // Lọc chống bấm nhầm liên tiếp
+            lastTouchTime = now;
+
+            if (appState === 0 || appState === 5) {
+                // MỞ MÁY
+                appState = 1;
+                targetLidRot = -Math.PI * 0.65; // Mở khoảng 117 độ
+                targetCamPos.set(0, 1.2, 2.2);  // Camera bay lướt thẳng vào màn hình
+                targetLookAt.set(0, 1.0, -1.0); // Nhìn lên tâm màn hình
+                
+                instrBox.style.display = 'none';
+                screenLight.intensity = 1.0;
+
+                currentSnippet = 0;
+                isTyping = true;
+                codeProgress = 0;
+            } else if (appState > 0 && appState < 5) {
+                if (isTyping) {
+                    // Nhấp 1 cái thì chữ hiện toàn bộ câu luôn
+                    codeProgress = snippets[currentSnippet].length;
+                    isTyping = false;
+                } else {
+                    // Chuyển sang lời chúc kế tiếp
+                    currentSnippet++;
+                    if (currentSnippet >= snippets.length) {
+                        // TẮT MÁY
+                        appState = 5;
+                        targetLidRot = 0;
+                        targetCamPos.set(3, 3.5, 4.5); // Camera bay vòng ra ngoài
+                        targetLookAt.set(0, 0, 0);
+                        
+                        instrBox.style.display = 'block';
+                        instrBox.innerText = "CHẠM ĐỂ MỞ LẠI";
+                        screenLight.intensity = 0;
+                    } else {
+                        appState++;
+                        isTyping = true;
+                        codeProgress = 0;
+                    }
+                }
+            }
+        });
+
+        // Vòng lặp gõ chữ Typewriter
+        setInterval(() => {
+            if (isTyping) {
+                codeProgress += 3;
+                if (codeProgress >= snippets[currentSnippet].length) {
+                    codeProgress = snippets[currentSnippet].length;
+                    isTyping = false;
+                }
+                typedCode = snippets[currentSnippet].substring(0, codeProgress) + (Math.random() > 0.5 ? "█" : "");
+            } else if (appState > 0 && appState < 5) {
+                typedCode = snippets[currentSnippet] + (Math.floor(Date.now() / 500) % 2 === 0 ? "█" : "");
+            }
+        }, 30);
+
+        // Vòng lặp Render 3D
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Chuyển động mượt (Lerp)
+            currentLidRot += (targetLidRot - currentLidRot) * 0.08;
+            lidGroup.rotation.x = currentLidRot;
+
+            currentCamPos.lerp(targetCamPos, 0.05);
+            currentLookAt.lerp(targetLookAt, 0.05);
+            
+            camera.position.copy(currentCamPos);
+            camera.lookAt(currentLookAt);
+
+            renderCanvas();
+            renderer.render(scene, camera);
+        }
+
+        // Hỗ trợ xoay màn hình điện thoại
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Khởi động
+        animate();
+    </script>
+</body>
+</html>
